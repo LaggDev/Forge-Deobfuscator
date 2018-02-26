@@ -1,81 +1,104 @@
+import java.io.File;
 import java.io.*;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class Deobfuscator {
 	
-	public static String translate(String identifier) {
-		try {
-			BufferedReader in = new BufferedReader(new FileReader("C:\\Users\\ddude\\Desktop\\forge obfuscation2.txt"));
-			String line = in.readLine();
-			while(line!=null) {
-				String[] split = line.split(":");
-				if(split[0].equals(identifier)) {
-					return split[1];
-				}
-				line = in.readLine();
+	public static void main(String[] args) throws IOException {
+		while(true) {
+			Deobfuscator deobfuscator = new Deobfuscator();
+			System.out.println("Please enter the path to a file or directory, and hit enter:");
+			BufferedReader in = new BufferedReader(new InputStreamReader(System.in));
+			String filePath = in.readLine();
+			File f = new File(filePath);
+			if(f.exists()) {
+				deobfuscator.run(f);
+				break;
+			} else {
+				System.out.println("That is an invalid file path! Try again.");
 			}
-		} catch (Exception e) {
+		}
+	}
+	
+	public void run(File base) {
+		List<File> translators = getFiles(new File("./resources"),(File f) -> f.getName().endsWith(".csv"));
+		Map<String,String> map = createMap(translators);
+		List<File> toFix = getFiles(base, (File f) -> f.getName().endsWith(".java"));
+		for(File f : toFix) {
+			fix(f,map);
+		}
+	}
+	
+	public void fix(File f, Map<String,String> map) {
+		try {
+			BufferedReader in = new BufferedReader(new FileReader(f));
+			String line;
+			Pattern p = Pattern.compile("((func|field)_\\d+_[a-zA-Z]+)");
+			List<String> newLines = new ArrayList<String>();
+			while((line = in.readLine())!=null) {
+				String newLine = line;
+				Matcher m = p.matcher(line);
+				while(m.find()) {
+					if(map.containsKey(m.group(1))) {
+						newLine = newLine.replaceAll(m.group(1), map.get(m.group(1)));
+					}
+				}
+				newLines.add(newLine);
+			}
+			in.close();
+			f.delete();
+			f.createNewFile();
+			PrintWriter out = new PrintWriter(new FileWriter(f));
+			for(String s : newLines) {
+				out.println(s);
+			}
+			out.close();
+		} catch (IOException e) {
 			e.printStackTrace();
 		}
-		return "/*TODO ERROR*/" + identifier;
 	}
 	
-	public static ArrayList<File> findfiles(File folder) {
-		File[] files = folder.listFiles();
-		ArrayList<File> list = new ArrayList<File>();
-		for(int i = 0; i<files.length; i++) {
-			if(files[i].isDirectory()) {
-				ArrayList<File> sublist = findfiles(files[i]);
-				for(int j = 0; j<sublist.size(); j++) {
-					list.add(sublist.get(j));
-				}
-			} else {
-				list.add(files[i]);
-			}
-		}
-		return list;
-	}
-	
-	public static void main(String[] args) {
-		try {
-			File f = new File("C:\\Users\\ddude\\Desktop\\orange's simple mods\\src\\main\\java\\com\\orangemarshall");
-			ArrayList<File> files = findfiles(f);
-			for(int i = 0; i<files.size(); i++) {
-				//System.out.println(files.get(i).getName());
-				
-				BufferedReader in = new BufferedReader(new FileReader(files.get(i)));
-				ArrayList<String> list = new ArrayList<String>();
-				String line = in.readLine();
-				while(line!=null) {
-					Pattern p = Pattern.compile("(func_\\d+_[a-zA-Z]+|field_\\d+_[a-zA-Z]+)");
+	public Map<String,String> createMap(List<File> translators) {
+		Map<String,String> map = new HashMap<String,String>();
+		for(File f : translators) {
+			try {
+				BufferedReader in = new BufferedReader(new FileReader(f));
+				String line;
+				Pattern p = Pattern.compile("(.*),(.*),.*,.*");
+				while((line = in.readLine())!=null) {
 					Matcher m = p.matcher(line);
-					int count = 0;
-					while(m.find()) {
-						System.out.println(m.group(1) + " to -> " + translate(m.group(1)));
-						System.out.println("old string: " + line);
-						line = line.substring(0, m.start(1)-count) + translate(m.group(1)) + line.substring(m.end(1)-count,line.length());
-						System.out.println("new string: " + line);
-						count+=m.group(1).length()-translate(m.group(1)).length();
+					if(m.find()) {
+						map.put(m.group(1), m.group(2));
 					}
-					list.add(line);
-					line = in.readLine();
 				}
 				in.close();
-				
-				BufferedWriter out = new BufferedWriter(new FileWriter(files.get(i)));
-				for(int j = 0; j<list.size(); j++) {
-					out.write(list.get(j) + "\r\n");
-				}
-				out.close();
-				
+			} catch (IOException e) {
+				e.printStackTrace();
 			}
-			
-			
-		} catch (Exception e) {
-			System.out.println("error");
-			e.printStackTrace();
 		}
+		return map;
 	}
-}
+	
+	public List<File> getFiles(File base, SearchQuery search) {
+		List<File> found = new ArrayList<File>();
+		if(!base.isDirectory()) {
+			if(search.search(base)) {
+				found.add(base);
+			}
+		} else {
+			for(File f : base.listFiles()) {
+				found.addAll(getFiles(f,search));
+			}	
+		}
+		return found;
+	}
+	
+	public interface SearchQuery {
+		abstract boolean search(File f);
+	}
+}	

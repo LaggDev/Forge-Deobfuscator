@@ -3,6 +3,7 @@ import java.util.ArrayList;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+@Deprecated
 public class FormatResourceTxt {
 	public static void main(String[] args) {
 		try {
